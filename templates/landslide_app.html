@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Landslide Prediction</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .result-safe { color: #16a34a; } 
+        .result-danger { color: #dc2626; } 
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: none; 
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl">
+        <h1 class="text-3xl font-bold mb-2 text-center text-gray-800">Landslide Risk Predictor</h1>
+        <p class="text-gray-600 mb-6 text-center">Enter the details for the central cell of an area to get a real prediction from the CNN model.</p>
+
+        <form id="prediction-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            <div>
+                <label for="elevation" class="block text-sm font-medium text-gray-700">Elevation (meters)</label>
+                <input type="number" id="elevation" name="elevation" placeholder="e.g., 150" value="156" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label for="slope" class="block text-sm font-medium text-gray-700">Slope (degrees)</label>
+                <input type="number" step="0.1" id="slope" name="slope" placeholder="e.g., 35" value="32.3" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label for="aspect" class="block text-sm font-medium text-gray-700">Aspect (degrees, 0-360)</label>
+                <input type="number" step="0.1" id="aspect" name="aspect" placeholder="e.g., 180" value="198.4" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label for="placurv" class="block text-sm font-medium text-gray-700">Plan Curvature</label>
+                <input type="number" step="0.001" id="placurv" name="placurv" placeholder="e.g., 0.015" value="0.017" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label for="procurv" class="block text-sm font-medium text-gray-700">Profile Curvature</label>
+                <input type="number" step="0.001" id="procurv" name="procurv" placeholder="e.g., -0.005" value="-0.003" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label for="lsfactor" class="block text-sm font-medium text-gray-700">LS Factor</label>
+                <input type="number" step="0.1" id="lsfactor" name="lsfactor" placeholder="e.g., 9.5" value="9.0" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label for="twi" class="block text-sm font-medium text-gray-700">Topographic Wetness Index (TWI)</label>
+                <input type="number" step="0.1" id="twi" name="twi" placeholder="e.g., 4.5" value="4.3" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label for="geology" class="block text-sm font-medium text-gray-700">Geology (Categorical Code)</label>
+                <input type="number" id="geology" name="geology" placeholder="e.g., 3" value="3" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+             <div class="md:col-span-2">
+                <label for="sdoif" class="block text-sm font-medium text-gray-700">SDOIF</label>
+                <input type="number" step="0.01" id="sdoif" name="sdoif" placeholder="e.g., 1.28" value="1.35" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div class="md:col-span-2 flex justify-center mt-4">
+                <button type="submit" class="flex items-center justify-center w-full md:w-1/2 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105">
+                    <span id="button-text">Predict Risk</span>
+                    <div id="loader" class="loader ml-3"></div>
+                </button>
+            </div>
+        </form>
+        <div id="result" class="mt-8 text-center text-2xl font-semibold"></div>
+    </div>
+
+    <script>
+        document.getElementById('prediction-form').addEventListener('submit', function(event) {
+
+            event.preventDefault();
+
+
+            const resultDiv = document.getElementById('result');
+            const loader = document.getElementById('loader');
+            const buttonText = document.getElementById('button-text');
+            
+
+            resultDiv.innerHTML = '';
+            loader.style.display = 'block';
+            buttonText.innerText = 'Analyzing...';
+
+
+            const formData = new FormData(event.target);
+            const data = Object.fromEntries(formData.entries());
+
+
+            fetch('http://127.0.0.1:8000/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data), 
+            })
+            .then(response => {
+
+                if (!response.ok) { throw new Error('Network response was not ok'); }
+                return response.json(); 
+            })
+            .then(predictionData => {
+                if (predictionData.error) {
+                    resultDiv.innerHTML = `<p class="result-danger">Error: ${predictionData.error}</p>`;
+                } else {
+                    let resultClass = predictionData.is_landslide ? 'result-danger' : 'result-safe';
+                    resultDiv.innerHTML = `<p class="${resultClass}">${predictionData.prediction}</p>
+                                           <p class="text-sm text-gray-500 mt-2">Model Confidence Score: ${predictionData.confidence_score}</p>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                resultDiv.innerHTML = `<p class="result-danger">Error: Could not get a prediction. Please check if the backend server is running.</p>`;
+            })
+            .finally(() => {
+
+                loader.style.display = 'none';
+                buttonText.innerText = 'Predict Risk';
+            });
+        });
+    </script>
+</body>
+</html>
+
